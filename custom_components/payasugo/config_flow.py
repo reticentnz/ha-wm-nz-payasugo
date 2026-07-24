@@ -79,6 +79,8 @@ class PayAsUGOConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     self._credentials = user_input
                     self._addresses = addresses
                     return await self.async_step_address()
+            finally:
+                session.detach()
 
         return self.async_show_form(
             step_id="user",
@@ -169,6 +171,8 @@ class PayAsUGOConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     self._reauth_entry,
                     data_updates=data,
                 )
+            finally:
+                session.detach()
 
         return self.async_show_form(
             step_id="reauth_confirm",

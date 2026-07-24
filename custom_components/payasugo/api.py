@@ -666,8 +666,17 @@ def _decode_balanced_json(text: str, start: int) -> Any:
 
 
 def _unwrap_return_value(value: Any) -> dict[str, Any]:
-    while isinstance(value, dict) and set(value).issuperset({"returnValue"}):
-        value = value["returnValue"]
+    while True:
+        if isinstance(value, dict) and "returnValue" in value:
+            value = value["returnValue"]
+            continue
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except json.JSONDecodeError:
+                break
+            continue
+        break
     if not isinstance(value, dict):
         raise PayAsUGOProtocolError("Unexpected PayAsUGO response structure")
     return value

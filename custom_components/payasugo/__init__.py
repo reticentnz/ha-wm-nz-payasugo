@@ -33,7 +33,6 @@ async def async_setup_entry(
     """Set up PayAsUGO from a config entry."""
     session = async_create_clientsession(
         hass,
-        auto_cleanup=False,
         cookie_jar=CookieJar(),
     )
     client = PayAsUGOClient(

@@ -202,6 +202,14 @@ def test_unwrap_return_value() -> None:
     assert _unwrap_return_value(
         {"returnValue": {"returnValue": {"currentEvents": []}, "cacheable": False}}
     ) == {"currentEvents": []}
+    assert _unwrap_return_value(
+        {
+            "returnValue": {
+                "returnValue": '{"addressHasEvents":true,"currentEvents":[]}',
+                "cacheable": False,
+            }
+        }
+    ) == {"addressHasEvents": True, "currentEvents": []}
 
 
 def test_add_months_across_year() -> None:
