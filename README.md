@@ -1,6 +1,7 @@
 # Waste Management New Zealand PayAsUGO for Home Assistant
 
 [![GitHub Release](https://img.shields.io/github/v/release/reticentnz/ha-wm-nz-payasugo?include_prereleases)](https://github.com/reticentnz/ha-wm-nz-payasugo/releases)
+[![Validate](https://github.com/reticentnz/ha-wm-nz-payasugo/actions/workflows/validate.yml/badge.svg)](https://github.com/reticentnz/ha-wm-nz-payasugo/actions/workflows/validate.yml)
 
 An experimental Home Assistant custom integration for Waste Management New
 Zealand's PayAsUGO collection service.
@@ -22,13 +23,20 @@ It provides:
 
 ## Installation
 
-Copy `custom_components/payasugo` into the `custom_components` directory in
-your Home Assistant configuration, restart Home Assistant, then add
-**Waste Management New Zealand PayAsUGO** from
-**Settings → Devices & services**.
+### HACS
 
-For HACS, add this repository as a custom integration repository and install
-it, then restart Home Assistant.
+1. Open HACS.
+2. Add `https://github.com/reticentnz/ha-wm-nz-payasugo` as a custom
+   repository in the **Integration** category.
+3. Install **Waste Management New Zealand PayAsUGO**.
+4. Restart Home Assistant.
+5. Add the integration from **Settings → Devices & services**.
+
+### Manual
+
+Copy `custom_components/payasugo` into the `custom_components` directory in
+your Home Assistant configuration, restart Home Assistant, then add the
+integration from **Settings → Devices & services**.
 
 ## Configuration
 
@@ -54,3 +62,16 @@ loaded, and immediately after a collection is paused or re-enabled.
 The request and response models are based on a browser capture from July 2026.
 The integration should be treated as experimental until its login bootstrap
 and collection workflow have been tested against a Home Assistant instance.
+
+## Support
+
+Report defects through the
+[GitHub issue tracker](https://github.com/reticentnz/ha-wm-nz-payasugo/issues).
+Do not attach HAR files or include PayAsUGO passwords, cookies, addresses,
+account identifiers, or Salesforce tokens in an issue.
+
+## Disclaimer
+
+This is an unofficial community project. It is not endorsed by or affiliated
+with Waste Management New Zealand. PayAsUGO does not publish a supported API,
+so website changes may require integration updates.
