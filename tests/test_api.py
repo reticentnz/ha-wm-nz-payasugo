@@ -41,17 +41,43 @@ def test_execute_apex_reauthenticates_and_retries_once() -> None:
     assert client._aura_action.await_count == 2
 
 
-def test_ensure_authenticated_replaces_an_old_session() -> None:
+def test_ensure_authenticated_reuses_an_active_session() -> None:
     client = object.__new__(PayAsUGOClient)
     client._context = {"mode": "PROD"}
-    client._authenticated_at = 0.0
     client._reset_authentication = Mock()
     client.async_login = AsyncMock()
 
     asyncio.run(client._ensure_authenticated())
 
-    client._reset_authentication.assert_called_once_with()
-    client.async_login.assert_awaited_once_with()
+    client._reset_authentication.assert_not_called()
+    client.async_login.assert_not_awaited()
+
+
+def test_collection_lookup_stops_after_finding_an_upcoming_month() -> None:
+    client = object.__new__(PayAsUGOClient)
+    client._context = {"mode": "PROD"}
+    client._execute_apex = AsyncMock(
+        return_value={
+            "returnValue": {
+                "returnValue": {
+                    "currentEvents": [
+                        {
+                            "Id": "event-1",
+                            "EventDate__c": "2026-08-11",
+                            "Status__c": "Planned",
+                        }
+                    ]
+                }
+            }
+        }
+    )
+
+    collections = asyncio.run(
+        client.async_get_collections(today=date(2026, 8, 1))
+    )
+
+    assert [item.collection_id for item in collections] == ["event-1"]
+    client._execute_apex.assert_awaited_once()
 
 
 def test_auth_error_detection() -> None:

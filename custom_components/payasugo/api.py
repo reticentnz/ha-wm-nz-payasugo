@@ -7,7 +7,6 @@ import re
 from calendar import monthrange
 from collections.abc import Mapping
 from datetime import date
-from time import monotonic
 from typing import Any
 from urllib.parse import urljoin
 from uuid import uuid4
@@ -17,8 +16,6 @@ from yarl import URL
 
 from .const import BASE_URL
 from .models import Collection
-
-_AUTH_SESSION_MAX_AGE = 12 * 60 * 60
 
 
 class PayAsUGOError(Exception):
@@ -59,7 +56,6 @@ class PayAsUGOClient:
         self._address = address
         self._base_url = base_url.rstrip("/")
         self._context: dict[str, Any] | None = None
-        self._authenticated_at: float | None = None
         self._token = "null"
         self._response_cookies: dict[str, str] = {}
         self._page_uri = self._APP_PAGE
@@ -94,7 +90,6 @@ class PayAsUGOClient:
         self._set_aura_bootstrap(app_bootstrap)
         self._page_uri = self._APP_PAGE
         self._page_scope_id = str(uuid4())
-        self._authenticated_at = monotonic()
 
     async def _async_prepare_login(self) -> None:
         """Run the guest-session actions performed before browser login."""
@@ -223,6 +218,8 @@ class PayAsUGOClient:
                 collection = _parse_collection(raw_event)
                 if collection.collection_date >= (today or date.today()):
                     events[collection.collection_id] = collection
+            if events:
+                break
 
         return tuple(sorted(events.values(), key=lambda item: item.collection_date))
 
@@ -279,11 +276,7 @@ class PayAsUGOClient:
         )
 
     async def _ensure_authenticated(self) -> None:
-        if (
-            self._context is not None
-            and self._authenticated_at is not None
-            and monotonic() - self._authenticated_at < _AUTH_SESSION_MAX_AGE
-        ):
+        if self._context is not None:
             return
         self._reset_authentication()
         await self.async_login()
@@ -462,7 +455,6 @@ class PayAsUGOClient:
         """Discard stale Salesforce state before creating a fresh session."""
         self._session.cookie_jar.clear()
         self._context = None
-        self._authenticated_at = None
         self._token = "null"
         self._response_cookies.clear()
         self._page_uri = self._APP_PAGE
