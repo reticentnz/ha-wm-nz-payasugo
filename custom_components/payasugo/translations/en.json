@@ -4,14 +4,17 @@
     "step": {
       "user": {
         "title": "Connect to Waste Management NZ PayAsUGO",
-        "description": "Connect to the PayAsUGO service operated by Waste Management New Zealand. Enter your login and the service address exactly as it appears in PayAsUGO.",
+        "description": "Connect to the PayAsUGO service operated by Waste Management New Zealand. Your service addresses will be retrieved after you sign in.",
         "data": {
           "username": "Email",
-          "password": "Password",
+          "password": "Password"
+        }
+      },
+      "address": {
+        "title": "Choose a service address",
+        "description": "Select the PayAsUGO service to add to Home Assistant.",
+        "data": {
           "address": "Service address"
-        },
-        "data_description": {
-          "address": "The address used when loading the collection calendar."
         }
       },
       "reauth_confirm": {
@@ -25,7 +28,8 @@
     },
     "error": {
       "cannot_connect": "Unable to connect to PayAsUGO",
-      "invalid_auth": "The email or password is incorrect"
+      "invalid_auth": "The email or password is incorrect",
+      "no_addresses": "No active PayAsUGO service addresses were found"
     },
     "abort": {
       "already_configured": "This PayAsUGO service is already configured",

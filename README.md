@@ -35,7 +35,10 @@ it, then restart Home Assistant.
 Setup requires:
 
 - Your PayAsUGO email and password.
-- Your service address, entered exactly as shown in PayAsUGO.
+
+After sign-in, the integration retrieves the active service addresses attached
+to the account and presents them in a dropdown. Add each address as a separate
+integration entry if you want to manage multiple properties.
 
 Credentials are stored in Home Assistant's config entry storage. They are sent
 only to `payasugo.wastemanagement.co.nz`.

@@ -148,6 +148,44 @@ class PayAsUGOClient:
 
         return tuple(sorted(events.values(), key=lambda item: item.collection_date))
 
+    async def async_get_service_addresses(self) -> tuple[str, ...]:
+        """Return active PayAsUGO service addresses for the signed-in account."""
+        await self._ensure_authenticated()
+        user_details = await self._aura_action(
+            descriptor="apex://PaytAppController/ACTION$getUserDetails",
+            calling_descriptor="UNKNOWN",
+            params={},
+        )
+        if not isinstance(user_details, str):
+            raise PayAsUGOProtocolError("Unexpected PayAsUGO account response")
+        try:
+            account = json.loads(user_details).get("userAccount", {})
+        except (json.JSONDecodeError, AttributeError) as err:
+            raise PayAsUGOProtocolError(
+                "PayAsUGO returned invalid account details"
+            ) from err
+        account_id = account.get("Id")
+        if not isinstance(account_id, str) or not account_id:
+            raise PayAsUGOProtocolError(
+                "PayAsUGO account has no service account identifier"
+            )
+
+        value = await self._execute_apex(
+            "getUsersOrderAddress",
+            {
+                "accId": account_id,
+                "statusList": ["Activated", "Processed"],
+            },
+        )
+        addresses = _unwrap_return_value(value)
+        return tuple(
+            sorted(
+                address
+                for address, active in addresses.items()
+                if isinstance(address, str) and active
+            )
+        )
+
     async def async_set_collection_enabled(
         self, collection_id: str, enabled: bool
     ) -> None:

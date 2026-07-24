@@ -12,6 +12,11 @@ from aiohttp import CookieJar
 from homeassistant import config_entries
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
+from homeassistant.helpers.selector import (
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
+)
 
 from .api import PayAsUGOAuthError, PayAsUGOClient, PayAsUGOError
 from .const import CONF_ADDRESS, DOMAIN
@@ -23,7 +28,6 @@ STEP_USER_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_USERNAME): str,
         vol.Required(CONF_PASSWORD): str,
-        vol.Required(CONF_ADDRESS): str,
     }
 )
 
@@ -33,20 +37,17 @@ class PayAsUGOConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    def __init__(self) -> None:
+        """Initialize the PayAsUGO config flow."""
+        self._credentials: dict[str, str] = {}
+        self._addresses: tuple[str, ...] = ()
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
         """Handle initial setup."""
         errors: dict[str, str] = {}
         if user_input is not None:
-            identity = (
-                f"{user_input[CONF_USERNAME].casefold()}:"
-                f"{user_input[CONF_ADDRESS].casefold()}"
-            )
-            await self.async_set_unique_id(
-                hashlib.sha256(identity.encode()).hexdigest()
-            )
-            self._abort_if_unique_id_configured()
             session = async_create_clientsession(
                 self.hass,
                 auto_cleanup=False,
@@ -56,11 +57,11 @@ class PayAsUGOConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 session,
                 user_input[CONF_USERNAME],
                 user_input[CONF_PASSWORD],
-                user_input[CONF_ADDRESS],
+                "",
             )
             try:
                 await client.async_login()
-                await client.async_get_collections(months=1)
+                addresses = await client.async_get_service_addresses()
             except PayAsUGOAuthError as err:
                 _LOGGER.debug("PayAsUGO authentication failed: %s", err)
                 errors["base"] = "invalid_auth"
@@ -68,15 +69,55 @@ class PayAsUGOConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _LOGGER.warning("Unable to connect to PayAsUGO: %s", err)
                 errors["base"] = "cannot_connect"
             else:
-                return self.async_create_entry(
-                    title="Waste Management NZ PayAsUGO",
-                    data=user_input,
-                )
+                if not addresses:
+                    errors["base"] = "no_addresses"
+                else:
+                    self._credentials = user_input
+                    self._addresses = addresses
+                    return await self.async_step_address()
 
         return self.async_show_form(
             step_id="user",
             data_schema=STEP_USER_SCHEMA,
             errors=errors,
+        )
+
+    async def async_step_address(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Let the user select a service address returned by PayAsUGO."""
+        if not self._credentials or not self._addresses:
+            return self.async_abort(reason="cannot_connect")
+
+        if user_input is not None:
+            address = user_input[CONF_ADDRESS]
+            if address not in self._addresses:
+                return self.async_abort(reason="cannot_connect")
+            identity = (
+                f"{self._credentials[CONF_USERNAME].casefold()}:"
+                f"{address.casefold()}"
+            )
+            await self.async_set_unique_id(
+                hashlib.sha256(identity.encode()).hexdigest()
+            )
+            self._abort_if_unique_id_configured()
+            return self.async_create_entry(
+                title="Waste Management NZ PayAsUGO",
+                data={**self._credentials, CONF_ADDRESS: address},
+            )
+
+        return self.async_show_form(
+            step_id="address",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_ADDRESS): SelectSelector(
+                        SelectSelectorConfig(
+                            options=list(self._addresses),
+                            mode=SelectSelectorMode.DROPDOWN,
+                        )
+                    )
+                }
+            ),
         )
 
     async def async_step_reauth(
