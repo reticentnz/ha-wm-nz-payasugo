@@ -110,7 +110,7 @@ class PayAsUGOClient:
                     "PayAsUGO did not provide its Aura security token"
                 )
             token = cookie.value
-        self._context = context
+        self._context = _compact_aura_context(context)
         self._token = token
 
     async def async_get_collections(
@@ -271,7 +271,7 @@ class PayAsUGOClient:
             raise PayAsUGOProtocolError("PayAsUGO returned no Aura action")
         response_context = payload.get("context")
         if isinstance(response_context, dict):
-            self._context = response_context
+            self._context = _compact_aura_context(response_context)
         action = actions[0]
         state = action.get("state")
         if state != "SUCCESS":
@@ -332,6 +332,22 @@ def _redact_error_detail(content: str, username: str, password: str) -> str:
         detail,
     )
     return detail[:500]
+
+
+def _compact_aura_context(context: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the request context produced by Salesforce's browser runtime."""
+    required = ("mode", "fwuid", "app", "loaded")
+    if any(key not in context for key in required):
+        raise PayAsUGOProtocolError("Aura context is missing required fields")
+    return {
+        "mode": context["mode"],
+        "fwuid": context["fwuid"],
+        "app": context["app"],
+        "loaded": context["loaded"],
+        "dn": [],
+        "globals": {"srcdoc": True},
+        "uad": True,
+    }
 
 
 def _aura_route(descriptor: str) -> str:

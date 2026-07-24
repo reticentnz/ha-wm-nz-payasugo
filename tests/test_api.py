@@ -5,12 +5,33 @@ from datetime import date
 from custom_components.payasugo.api import (
     _add_months,
     _aura_route,
+    _compact_aura_context,
     _extract_aura_bootstrap,
     _extract_bootstrap_script_url,
     _parse_collection,
     _redact_error_detail,
     _unwrap_return_value,
 )
+
+
+def test_compact_aura_context() -> None:
+    assert _compact_aura_context(
+        {
+            "mode": "PROD",
+            "fwuid": "example",
+            "app": "siteforce:loginApp2",
+            "loaded": {"APPLICATION@markup://siteforce:loginApp2": "value"},
+            "componentDefs": {"unsafe": "100%"},
+        }
+    ) == {
+        "mode": "PROD",
+        "fwuid": "example",
+        "app": "siteforce:loginApp2",
+        "loaded": {"APPLICATION@markup://siteforce:loginApp2": "value"},
+        "dn": [],
+        "globals": {"srcdoc": True},
+        "uad": True,
+    }
 
 
 def test_redact_error_detail() -> None:
