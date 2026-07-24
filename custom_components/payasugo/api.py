@@ -76,10 +76,7 @@ class PayAsUGOClient:
                 "startUrl": "",
             },
         )
-        if not isinstance(result, str) or not result:
-            raise PayAsUGOAuthError("PayAsUGO rejected the supplied credentials")
-
-        redirect = urljoin(self._base_url, result)
+        redirect = urljoin(self._base_url, _login_redirect(result))
         redirect_response = await self._get(redirect)
         await redirect_response.read()
 
@@ -348,6 +345,15 @@ def _compact_aura_context(context: Mapping[str, Any]) -> dict[str, Any]:
         "globals": {"srcdoc": True},
         "uad": True,
     }
+
+
+def _login_redirect(result: Any) -> str:
+    """Validate that Salesforce returned a login redirect, not an error message."""
+    if not isinstance(result, str) or not result:
+        raise PayAsUGOAuthError("PayAsUGO rejected the supplied credentials")
+    if not result.startswith(("/", "http://", "https://")):
+        raise PayAsUGOAuthError("PayAsUGO rejected the supplied credentials")
+    return result
 
 
 def _aura_route(descriptor: str) -> str:

@@ -8,10 +8,24 @@ from custom_components.payasugo.api import (
     _compact_aura_context,
     _extract_aura_bootstrap,
     _extract_bootstrap_script_url,
+    _login_redirect,
     _parse_collection,
     _redact_error_detail,
     _unwrap_return_value,
 )
+
+
+def test_login_redirect_rejects_error_message() -> None:
+    try:
+        _login_redirect("Your login was unsuccessful.")
+    except Exception as err:
+        assert type(err).__name__ == "PayAsUGOAuthError"
+    else:
+        raise AssertionError("Expected the login error message to be rejected")
+
+
+def test_login_redirect_accepts_path() -> None:
+    assert _login_redirect("/s/") == "/s/"
 
 
 def test_compact_aura_context() -> None:
