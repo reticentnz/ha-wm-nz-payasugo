@@ -1,0 +1,47 @@
+{
+  "title": "Waste Management New Zealand PayAsUGO",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Waste Management NZ PayAsUGO",
+        "description": "Connect to the PayAsUGO service operated by Waste Management New Zealand. Enter your login and the service address exactly as it appears in PayAsUGO.",
+        "data": {
+          "username": "Email",
+          "password": "Password",
+          "address": "Service address"
+        },
+        "data_description": {
+          "address": "The address used when loading the collection calendar."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reconnect Waste Management NZ PayAsUGO",
+        "description": "Enter your current Waste Management New Zealand PayAsUGO credentials.",
+        "data": {
+          "username": "Email",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to PayAsUGO",
+      "invalid_auth": "The email or password is incorrect"
+    },
+    "abort": {
+      "already_configured": "This PayAsUGO service is already configured",
+      "reauth_successful": "PayAsUGO was reconnected successfully"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "next_collection": {
+        "name": "Next collection"
+      }
+    },
+    "switch": {
+      "next_collection": {
+        "name": "Next collection enabled"
+      }
+    }
+  }
+}
