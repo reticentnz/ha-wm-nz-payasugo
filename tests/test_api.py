@@ -1,10 +1,13 @@
 """Tests for the PayAsUGO API parsing helpers."""
 
+import asyncio
 from datetime import date
 from http.cookies import SimpleCookie
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock
 
 from custom_components.payasugo.api import (
+    PayAsUGOAuthError,
     PayAsUGOClient,
     _add_months,
     _aura_route,
@@ -15,10 +18,46 @@ from custom_components.payasugo.api import (
     _extract_bootstrap_script_url,
     _login_event_url,
     _login_redirect,
+    _is_auth_error,
     _parse_collection,
     _redact_error_detail,
     _unwrap_return_value,
 )
+
+
+def test_execute_apex_reauthenticates_and_retries_once() -> None:
+    client = object.__new__(PayAsUGOClient)
+    client._aura_action = AsyncMock(
+        side_effect=[PayAsUGOAuthError("session expired"), {"result": "ok"}]
+    )
+    client._reset_authentication = Mock()
+    client.async_login = AsyncMock()
+
+    result = asyncio.run(client._execute_apex("example", {"value": 1}))
+
+    assert result == {"result": "ok"}
+    client._reset_authentication.assert_called_once_with()
+    client.async_login.assert_awaited_once_with()
+    assert client._aura_action.await_count == 2
+
+
+def test_ensure_authenticated_replaces_an_old_session() -> None:
+    client = object.__new__(PayAsUGOClient)
+    client._context = {"mode": "PROD"}
+    client._authenticated_at = 0.0
+    client._reset_authentication = Mock()
+    client.async_login = AsyncMock()
+
+    asyncio.run(client._ensure_authenticated())
+
+    client._reset_authentication.assert_called_once_with()
+    client.async_login.assert_awaited_once_with()
+
+
+def test_auth_error_detection() -> None:
+    assert _is_auth_error("Invalid session")
+    assert _is_auth_error("Client is out of sync")
+    assert not _is_auth_error("The service is temporarily unavailable")
 
 
 def test_remember_response_cookies_including_redirects() -> None:

@@ -7,6 +7,7 @@ import re
 from calendar import monthrange
 from collections.abc import Mapping
 from datetime import date
+from time import monotonic
 from typing import Any
 from urllib.parse import urljoin
 from uuid import uuid4
@@ -16,6 +17,8 @@ from yarl import URL
 
 from .const import BASE_URL
 from .models import Collection
+
+_AUTH_SESSION_MAX_AGE = 12 * 60 * 60
 
 
 class PayAsUGOError(Exception):
@@ -56,6 +59,7 @@ class PayAsUGOClient:
         self._address = address
         self._base_url = base_url.rstrip("/")
         self._context: dict[str, Any] | None = None
+        self._authenticated_at: float | None = None
         self._token = "null"
         self._response_cookies: dict[str, str] = {}
         self._page_uri = self._APP_PAGE
@@ -90,6 +94,7 @@ class PayAsUGOClient:
         self._set_aura_bootstrap(app_bootstrap)
         self._page_uri = self._APP_PAGE
         self._page_scope_id = str(uuid4())
+        self._authenticated_at = monotonic()
 
     async def _async_prepare_login(self) -> None:
         """Run the guest-session actions performed before browser login."""
@@ -274,24 +279,40 @@ class PayAsUGOClient:
         )
 
     async def _ensure_authenticated(self) -> None:
-        if self._context is None:
-            await self.async_login()
+        if (
+            self._context is not None
+            and self._authenticated_at is not None
+            and monotonic() - self._authenticated_at < _AUTH_SESSION_MAX_AGE
+        ):
+            return
+        self._reset_authentication()
+        await self.async_login()
 
     async def _execute_apex(
         self, method: str, params: Mapping[str, Any]
     ) -> Any:
-        return await self._aura_action(
-            descriptor="aura://ApexActionController/ACTION$execute",
-            calling_descriptor="UNKNOWN",
-            params={
-                "namespace": "",
-                "classname": "PaytAppController",
-                "method": method,
-                "params": dict(params),
-                "cacheable": False,
-                "isContinuation": False,
-            },
-        )
+        action_params = {
+            "namespace": "",
+            "classname": "PaytAppController",
+            "method": method,
+            "params": dict(params),
+            "cacheable": False,
+            "isContinuation": False,
+        }
+        try:
+            return await self._aura_action(
+                descriptor="aura://ApexActionController/ACTION$execute",
+                calling_descriptor="UNKNOWN",
+                params=action_params,
+            )
+        except PayAsUGOAuthError:
+            self._reset_authentication()
+            await self.async_login()
+            return await self._aura_action(
+                descriptor="aura://ApexActionController/ACTION$execute",
+                calling_descriptor="UNKNOWN",
+                params=action_params,
+            )
 
     async def _aura_action(
         self,
@@ -341,6 +362,9 @@ class PayAsUGOClient:
             },
         )
         raw_response = await response.read()
+        if response.url.path.rstrip("/") == self._LOGIN_PAGE.rstrip("/"):
+            self._context = None
+            raise PayAsUGOAuthError("PayAsUGO session expired")
         try:
             payload = _decode_aura_response(raw_response)
         except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as err:
@@ -360,6 +384,9 @@ class PayAsUGOClient:
         if not actions:
             exception_message = _aura_exception_message(payload)
             if exception_message:
+                if _is_auth_error(exception_message):
+                    self._context = None
+                    raise PayAsUGOAuthError("PayAsUGO session expired")
                 raise PayAsUGOProtocolError(
                     _redact_error_detail(
                         exception_message,
@@ -376,7 +403,7 @@ class PayAsUGOClient:
         if state != "SUCCESS":
             errors = action.get("error") or []
             message_text = _error_message(errors)
-            if "login" in message_text.lower() or "credential" in message_text.lower():
+            if _is_auth_error(message_text):
                 self._context = None
                 raise PayAsUGOAuthError(message_text)
             raise PayAsUGOProtocolError(message_text or f"Aura action failed: {state}")
@@ -431,6 +458,17 @@ class PayAsUGOClient:
                 (name, morsel.value) for name, morsel in item.cookies.items()
             )
 
+    def _reset_authentication(self) -> None:
+        """Discard stale Salesforce state before creating a fresh session."""
+        self._session.cookie_jar.clear()
+        self._context = None
+        self._authenticated_at = None
+        self._token = "null"
+        self._response_cookies.clear()
+        self._page_uri = self._APP_PAGE
+        self._action_id = 1
+        self._page_scope_id = str(uuid4())
+
 
 def _redact_error_detail(content: str, username: str, password: str) -> str:
     """Return a bounded server error with authentication data removed."""
@@ -444,6 +482,24 @@ def _redact_error_detail(content: str, username: str, password: str) -> str:
         detail,
     )
     return detail[:500]
+
+
+def _is_auth_error(message: str) -> bool:
+    """Return whether Salesforce is reporting an expired login session."""
+    detail = message.casefold()
+    return any(
+        marker in detail
+        for marker in (
+            "authentication",
+            "client is out of sync",
+            "credential",
+            "guest user",
+            "invalid session",
+            "login",
+            "not authenticated",
+            "session expired",
+        )
+    )
 
 
 def _decode_aura_response(content: bytes) -> dict[str, Any]:
