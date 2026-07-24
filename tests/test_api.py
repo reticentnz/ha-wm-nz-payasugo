@@ -5,7 +5,9 @@ from datetime import date
 from custom_components.payasugo.api import (
     _add_months,
     _aura_route,
+    _aura_exception_message,
     _compact_aura_context,
+    _decode_aura_response,
     _extract_aura_bootstrap,
     _extract_bootstrap_script_url,
     _login_event_url,
@@ -14,6 +16,24 @@ from custom_components.payasugo.api import (
     _redact_error_detail,
     _unwrap_return_value,
 )
+
+
+def test_aura_exception_message() -> None:
+    payload = _decode_aura_response(
+        b'*/{"exceptionMessage":"Client is out of sync",'
+        b'"exceptionEvent":true}/*ERROR*/'
+    )
+    assert _aura_exception_message(payload) == "Client is out of sync"
+
+
+def test_decode_aura_response_with_prefix() -> None:
+    assert _decode_aura_response(b'*/{\"actions\":[]}') == {"actions": []}
+    assert _decode_aura_response(b'*/{\"actions\":[]}/*') == {"actions": []}
+    assert _decode_aura_response(
+        b'*/{\"event\":{\"descriptor\":\"markup://aura:doneWaiting\"}}'
+        b'/**/{\"actions\":[{\"state\":\"SUCCESS\"}]}/*'
+    ) == {"actions": [{"state": "SUCCESS"}]}
+    assert _decode_aura_response(b'while(1); {\"actions\":[]}') == {"actions": []}
 
 
 def test_login_event_url() -> None:

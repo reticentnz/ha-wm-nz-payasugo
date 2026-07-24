@@ -88,6 +88,7 @@ class PayAsUGOClient:
         app_bootstrap = await self._async_load_bootstrap(app_html)
         self._set_aura_bootstrap(app_bootstrap)
         self._page_uri = self._APP_PAGE
+        self._page_scope_id = str(uuid4())
 
     async def _async_prepare_login(self) -> None:
         """Run the guest-session actions performed before browser login."""
@@ -151,11 +152,25 @@ class PayAsUGOClient:
         if cookie_name:
             cookies = self._session.cookie_jar.filter_cookies(URL(self._base_url))
             cookie = cookies.get(cookie_name)
-            if cookie is None:
-                raise PayAsUGOProtocolError(
-                    "PayAsUGO did not provide its Aura security token"
-                )
-            token = cookie.value
+            if cookie is not None:
+                token = cookie.value
+        if len(token.split(".")) != 3:
+            cookies = self._session.cookie_jar.filter_cookies(URL(self._base_url))
+            token_candidates = [
+                cookie.value
+                for cookie in cookies.values()
+                if len(cookie.value) > 100
+                and len(cookie.value.split(".")) == 3
+            ]
+            if len(token_candidates) == 1:
+                token = token_candidates[0]
+        if (
+            len(token.split(".")) != 3
+            and context.get("app") == "siteforce:communityApp"
+        ):
+            raise PayAsUGOProtocolError(
+                "PayAsUGO did not provide its authenticated Aura security token"
+            )
         self._context = _compact_aura_context(context)
         self._token = token
 
@@ -199,7 +214,7 @@ class PayAsUGOClient:
         await self._ensure_authenticated()
         user_details = await self._aura_action(
             descriptor="apex://PaytAppController/ACTION$getUserDetails",
-            calling_descriptor="UNKNOWN",
+            calling_descriptor="markup://c:paytAppContainerCmp",
             params={},
         )
         if not isinstance(user_details, str):
@@ -313,13 +328,33 @@ class PayAsUGOClient:
                 "aura.token": self._token,
             },
         )
+        raw_response = await response.read()
         try:
-            payload = await response.json(content_type=None)
-        except (json.JSONDecodeError, ValueError) as err:
-            raise PayAsUGOProtocolError("PayAsUGO returned invalid JSON") from err
+            payload = _decode_aura_response(raw_response)
+        except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as err:
+            history = ",".join(str(item.status) for item in response.history) or "none"
+            prefix_hex = raw_response[:32].hex()
+            suffix_hex = raw_response[-32:].hex()
+            raise PayAsUGOProtocolError(
+                "PayAsUGO returned invalid JSON "
+                f"(status={response.status}, content_type={response.content_type}, "
+                f"path={response.url.path}, redirects={history}, "
+                f"bytes={len(raw_response)}, open_frames={raw_response.count(b'*/')}, "
+                f"close_frames={raw_response.count(b'/*')}, "
+                f"prefix_hex={prefix_hex}, suffix_hex={suffix_hex})"
+            ) from err
 
         actions = payload.get("actions", [])
         if not actions:
+            exception_message = _aura_exception_message(payload)
+            if exception_message:
+                raise PayAsUGOProtocolError(
+                    _redact_error_detail(
+                        exception_message,
+                        self._username,
+                        self._password,
+                    )
+                )
             raise PayAsUGOProtocolError("PayAsUGO returned no Aura action")
         response_context = payload.get("context")
         if isinstance(response_context, dict):
@@ -388,6 +423,64 @@ def _redact_error_detail(content: str, username: str, password: str) -> str:
         detail,
     )
     return detail[:500]
+
+
+def _decode_aura_response(content: bytes) -> dict[str, Any]:
+    """Decode Salesforce Aura JSON after its optional anti-XSSI prefix."""
+    value = content.lstrip()
+    if value.startswith(b"while(1);"):
+        value = value[len(b"while(1);") :].lstrip()
+
+    error_marker = value.find(b"/*ERROR*/")
+    if error_marker != -1:
+        frame = value[:error_marker]
+        if frame.startswith(b"*/"):
+            frame = frame[2:]
+        payload = json.loads(frame)
+        if not isinstance(payload, dict):
+            raise ValueError("Aura error response is not an object")
+        return payload
+
+    if value.startswith(b"*/"):
+        frames: list[dict[str, Any]] = []
+        for frame in value.split(b"/*"):
+            frame = frame.strip()
+            if frame.startswith(b"*/"):
+                frame = frame[2:].lstrip()
+            if not frame:
+                continue
+            payload = json.loads(frame)
+            if isinstance(payload, dict):
+                frames.append(payload)
+        for payload in frames:
+            if "actions" in payload:
+                return payload
+        if frames:
+            return frames[-1]
+        raise ValueError("Aura response has no JSON frames")
+
+    payload = json.loads(value)
+    if not isinstance(payload, dict):
+        raise ValueError("Aura response is not an object")
+    return payload
+
+
+def _aura_exception_message(payload: Mapping[str, Any]) -> str:
+    """Return a message from a framed Salesforce Aura exception event."""
+    message = payload.get("exceptionMessage")
+    if isinstance(message, str) and message:
+        return message
+    event = payload.get("event")
+    if not isinstance(event, dict):
+        return ""
+    attributes = event.get("attributes")
+    if not isinstance(attributes, dict):
+        return ""
+    values = attributes.get("values")
+    if not isinstance(values, dict):
+        return ""
+    message = values.get("message")
+    return message if isinstance(message, str) else ""
 
 
 def _compact_aura_context(context: Mapping[str, Any]) -> dict[str, Any]:
