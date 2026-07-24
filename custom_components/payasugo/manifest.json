@@ -4,9 +4,9 @@
   "codeowners": ["@reticentnz"],
   "config_flow": true,
   "documentation": "https://github.com/reticentnz/ha-wm-nz-payasugo",
-  "issue_tracker": "https://github.com/reticentnz/ha-wm-nz-payasugo/issues",
   "integration_type": "service",
   "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/reticentnz/ha-wm-nz-payasugo/issues",
   "requirements": [],
-  "version": "0.2.3"
+  "version": "0.2.4"
 }
