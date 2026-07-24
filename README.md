@@ -60,8 +60,9 @@ loaded, and immediately after a collection is paused or re-enabled.
 ## Development status
 
 The request and response models are based on a browser capture from July 2026.
-The integration should be treated as experimental until its login bootstrap
-and collection workflow have been tested against a Home Assistant instance.
+The integration has been tested on a Home Assistant instance, including setup
+and the collection workflow. It should still be treated as experimental because
+it relies on the unsupported private API used by the PayAsUGO website.
 
 ## Support
 
