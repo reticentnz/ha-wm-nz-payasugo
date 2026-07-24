@@ -57,6 +57,7 @@ class PayAsUGOClient:
         self._base_url = base_url.rstrip("/")
         self._context: dict[str, Any] | None = None
         self._token = "null"
+        self._response_cookies: dict[str, str] = {}
         self._page_uri = self._APP_PAGE
         self._action_id = 1
         self._page_scope_id = str(uuid4())
@@ -154,22 +155,33 @@ class PayAsUGOClient:
             cookie = cookies.get(cookie_name)
             if cookie is not None:
                 token = cookie.value
+            elif cookie_name in self._response_cookies:
+                token = self._response_cookies[cookie_name]
         if len(token.split(".")) != 3:
             cookies = self._session.cookie_jar.filter_cookies(URL(self._base_url))
-            token_candidates = [
+            token_candidates = {
                 cookie.value
                 for cookie in cookies.values()
                 if len(cookie.value) > 100
                 and len(cookie.value.split(".")) == 3
-            ]
+            }
+            token_candidates.update(
+                value
+                for value in self._response_cookies.values()
+                if len(value) > 100 and len(value.split(".")) == 3
+            )
             if len(token_candidates) == 1:
-                token = token_candidates[0]
+                token = next(iter(token_candidates))
         if (
             len(token.split(".")) != 3
             and context.get("app") == "siteforce:communityApp"
         ):
             raise PayAsUGOProtocolError(
-                "PayAsUGO did not provide its authenticated Aura security token"
+                "PayAsUGO did not provide its authenticated Aura security token "
+                f"(declared_parts={len(token.split('.'))}, "
+                f"response_cookies={len(self._response_cookies)}, "
+                f"token_candidates={len(token_candidates)}, "
+                f"named_cookie_seen={cookie_name in self._response_cookies})"
             )
         self._context = _compact_aura_context(context)
         self._token = token
@@ -378,6 +390,7 @@ class PayAsUGOClient:
         url = urljoin(f"{self._base_url}/", path_or_url)
         try:
             response = await self._session.get(url, allow_redirects=True)
+            self._remember_response_cookies(response)
             response.raise_for_status()
             return response
         except PayAsUGOError:
@@ -391,6 +404,7 @@ class PayAsUGOClient:
         url = urljoin(f"{self._base_url}/", path)
         try:
             response = await self._session.post(url, **kwargs)
+            self._remember_response_cookies(response)
             if response.status >= 400:
                 detail = _redact_error_detail(
                     await response.text(),
@@ -409,6 +423,13 @@ class PayAsUGOClient:
             raise PayAsUGOConnectionError(
                 f"Unable to reach PayAsUGO ({type(err).__name__}: {err})"
             ) from err
+
+    def _remember_response_cookies(self, response: ClientResponse) -> None:
+        """Remember response cookies that aiohttp may omit from its cookie jar."""
+        for item in (*response.history, response):
+            self._response_cookies.update(
+                (name, morsel.value) for name, morsel in item.cookies.items()
+            )
 
 
 def _redact_error_detail(content: str, username: str, password: str) -> str:

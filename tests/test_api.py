@@ -1,8 +1,11 @@
 """Tests for the PayAsUGO API parsing helpers."""
 
 from datetime import date
+from http.cookies import SimpleCookie
+from types import SimpleNamespace
 
 from custom_components.payasugo.api import (
+    PayAsUGOClient,
     _add_months,
     _aura_route,
     _aura_exception_message,
@@ -16,6 +19,26 @@ from custom_components.payasugo.api import (
     _redact_error_detail,
     _unwrap_return_value,
 )
+
+
+def test_remember_response_cookies_including_redirects() -> None:
+    redirect_cookies = SimpleCookie()
+    redirect_cookies.load("redirect-token=first")
+    response_cookies = SimpleCookie()
+    response_cookies.load("authenticated-token=second")
+    response = SimpleNamespace(
+        history=(SimpleNamespace(cookies=redirect_cookies),),
+        cookies=response_cookies,
+    )
+    client = object.__new__(PayAsUGOClient)
+    client._response_cookies = {}
+
+    client._remember_response_cookies(response)
+
+    assert client._response_cookies == {
+        "redirect-token": "first",
+        "authenticated-token": "second",
+    }
 
 
 def test_aura_exception_message() -> None:
