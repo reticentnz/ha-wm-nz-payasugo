@@ -284,7 +284,9 @@ class PayAsUGOClient:
         except PayAsUGOError:
             raise
         except Exception as err:
-            raise PayAsUGOConnectionError("Unable to reach PayAsUGO") from err
+            raise PayAsUGOConnectionError(
+                f"Unable to reach PayAsUGO ({type(err).__name__}: {err})"
+            ) from err
 
     async def _post(self, path: str, **kwargs: Any) -> ClientResponse:
         url = urljoin(f"{self._base_url}/", path)
@@ -295,7 +297,9 @@ class PayAsUGOClient:
         except PayAsUGOError:
             raise
         except Exception as err:
-            raise PayAsUGOConnectionError("Unable to reach PayAsUGO") from err
+            raise PayAsUGOConnectionError(
+                f"Unable to reach PayAsUGO ({type(err).__name__}: {err})"
+            ) from err
 
 
 def _extract_aura_bootstrap(

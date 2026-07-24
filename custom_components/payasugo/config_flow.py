@@ -66,7 +66,11 @@ class PayAsUGOConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _LOGGER.debug("PayAsUGO authentication failed: %s", err)
                 errors["base"] = "invalid_auth"
             except PayAsUGOError as err:
-                _LOGGER.warning("Unable to connect to PayAsUGO: %s", err)
+                _LOGGER.warning(
+                    "Unable to connect to PayAsUGO: %s",
+                    err,
+                    exc_info=True,
+                )
                 errors["base"] = "cannot_connect"
             else:
                 if not addresses:
@@ -154,7 +158,11 @@ class PayAsUGOConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _LOGGER.debug("PayAsUGO authentication failed: %s", err)
                 errors["base"] = "invalid_auth"
             except PayAsUGOError as err:
-                _LOGGER.warning("Unable to reconnect to PayAsUGO: %s", err)
+                _LOGGER.warning(
+                    "Unable to reconnect to PayAsUGO: %s",
+                    err,
+                    exc_info=True,
+                )
                 errors["base"] = "cannot_connect"
             else:
                 return self.async_update_reload_and_abort(
