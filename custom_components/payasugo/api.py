@@ -11,6 +11,7 @@ from typing import Any
 from urllib.parse import urljoin
 
 from aiohttp import ClientResponse, ClientSession
+from yarl import URL
 
 from .const import BASE_URL
 from .models import Collection
@@ -62,7 +63,8 @@ class PayAsUGOClient:
         """Create an authenticated Aura session."""
         login_response = await self._get(self._LOGIN_PAGE)
         login_html = await login_response.text()
-        self._context, self._token = _extract_aura_bootstrap(login_html)
+        login_bootstrap = await self._async_load_bootstrap(login_html)
+        self._set_aura_bootstrap(login_bootstrap)
         self._page_uri = login_response.url.path_qs
 
         result = await self._aura_action(
@@ -83,8 +85,33 @@ class PayAsUGOClient:
 
         app_response = await self._get(self._APP_PAGE)
         app_html = await app_response.text()
-        self._context, self._token = _extract_aura_bootstrap(app_html)
+        app_bootstrap = await self._async_load_bootstrap(app_html)
+        self._set_aura_bootstrap(app_bootstrap)
         self._page_uri = self._APP_PAGE
+
+    async def _async_load_bootstrap(self, html: str) -> str:
+        """Return content containing Aura's runtime bootstrap configuration."""
+        try:
+            _extract_aura_bootstrap(html)
+        except PayAsUGOProtocolError:
+            bootstrap_path = _extract_bootstrap_script_url(html)
+            bootstrap_response = await self._get(bootstrap_path)
+            return await bootstrap_response.text()
+        return html
+
+    def _set_aura_bootstrap(self, content: str) -> None:
+        """Apply Aura context and resolve its short-lived CSRF cookie."""
+        context, token, cookie_name = _extract_aura_bootstrap(content)
+        if cookie_name:
+            cookies = self._session.cookie_jar.filter_cookies(URL(self._base_url))
+            cookie = cookies.get(cookie_name)
+            if cookie is None:
+                raise PayAsUGOProtocolError(
+                    "PayAsUGO did not provide its Aura security token"
+                )
+            token = cookie.value
+        self._context = context
+        self._token = token
 
     async def async_get_collections(
         self,
@@ -233,7 +260,9 @@ class PayAsUGOClient:
             raise PayAsUGOConnectionError("Unable to reach PayAsUGO") from err
 
 
-def _extract_aura_bootstrap(html: str) -> tuple[dict[str, Any], str]:
+def _extract_aura_bootstrap(
+    content: str,
+) -> tuple[dict[str, Any], str, str | None]:
     """Extract Aura context and CSRF token from a Salesforce bootstrap page."""
     markers = (
         "auraConfig",
@@ -243,12 +272,12 @@ def _extract_aura_bootstrap(html: str) -> tuple[dict[str, Any], str]:
     candidates: list[dict[str, Any]] = []
     for marker in markers:
         start = 0
-        while (position := html.find(marker, start)) != -1:
-            brace = html.find("{", position)
+        while (position := content.find(marker, start)) != -1:
+            brace = content.find("{", position)
             if brace == -1:
                 break
             try:
-                candidate = _decode_balanced_json(html, brace)
+                candidate = _decode_balanced_json(content, brace)
             except (json.JSONDecodeError, ValueError):
                 start = position + len(marker)
                 continue
@@ -260,20 +289,44 @@ def _extract_aura_bootstrap(html: str) -> tuple[dict[str, Any], str]:
         context = candidate.get("context")
         if isinstance(context, dict):
             token = candidate.get("token") or candidate.get("csrfToken") or "null"
-            return context, str(token)
+            cookie_name = candidate.get("eikoocnekot")
+            return (
+                context,
+                str(token),
+                cookie_name if isinstance(cookie_name, str) else None,
+            )
 
-    context_match = re.search(r'"context"\s*:', html)
+    context_match = re.search(r'"context"\s*:', content)
     if context_match:
-        brace = html.find("{", context_match.end())
+        brace = content.find("{", context_match.end())
         if brace != -1:
-            context = _decode_balanced_json(html, brace)
+            context = _decode_balanced_json(content, brace)
             if isinstance(context, dict) and "fwuid" in context:
                 token_match = re.search(
-                    r'"(?:token|csrfToken)"\s*:\s*"([^"]+)"', html
+                    r'"(?:token|csrfToken)"\s*:\s*"([^"]+)"', content
                 )
-                return context, token_match.group(1) if token_match else "null"
+                cookie_match = re.search(
+                    r'"eikoocnekot"\s*:\s*"([^"]+)"', content
+                )
+                return (
+                    context,
+                    token_match.group(1) if token_match else "null",
+                    cookie_match.group(1) if cookie_match else None,
+                )
 
     raise PayAsUGOProtocolError("Could not find Salesforce Aura bootstrap data")
+
+
+def _extract_bootstrap_script_url(html: str) -> str:
+    """Return the Aura bootstrap script URL from a Salesforce page."""
+    matches = re.findall(
+        r'<script[^>]+src=["\']([^"\']*bootstrap\.js[^"\']*)["\']',
+        html,
+        flags=re.IGNORECASE,
+    )
+    if not matches:
+        raise PayAsUGOProtocolError("Could not find Salesforce bootstrap script")
+    return matches[-1].replace("&amp;", "&")
 
 
 def _decode_balanced_json(text: str, start: int) -> Any:

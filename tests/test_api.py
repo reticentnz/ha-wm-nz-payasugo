@@ -5,6 +5,7 @@ from datetime import date
 from custom_components.payasugo.api import (
     _add_months,
     _extract_aura_bootstrap,
+    _extract_bootstrap_script_url,
     _parse_collection,
     _unwrap_return_value,
 )
@@ -19,9 +20,36 @@ def test_extract_aura_bootstrap() -> None:
     };
     </script>
     """
-    context, token = _extract_aura_bootstrap(html)
+    context, token, cookie_name = _extract_aura_bootstrap(html)
     assert context["fwuid"] == "example"
     assert token == "example-token"
+    assert cookie_name is None
+
+
+def test_extract_aura_cookie_name() -> None:
+    html = """
+    <script>
+    var auraConfig = {
+      "context": {"mode": "PROD", "fwuid": "example"},
+      "token": null,
+      "eikoocnekot": "__Host-example"
+    };
+    </script>
+    """
+    context, token, cookie_name = _extract_aura_bootstrap(html)
+    assert context["fwuid"] == "example"
+    assert token == "null"
+    assert cookie_name == "__Host-example"
+
+
+def test_extract_external_bootstrap_url() -> None:
+    html = """
+    <script src="/s/other.js"></script>
+    <script src="/s/bootstrap.js?aura.attributes=x&amp;mode=prod"></script>
+    """
+    assert _extract_bootstrap_script_url(html) == (
+        "/s/bootstrap.js?aura.attributes=x&mode=prod"
+    )
 
 
 def test_parse_collection() -> None:
@@ -47,4 +75,3 @@ def test_unwrap_return_value() -> None:
 
 def test_add_months_across_year() -> None:
     assert _add_months(date(2026, 12, 1), 2) == date(2027, 2, 1)
-

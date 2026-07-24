@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 from typing import Any
 
 import voluptuous as vol
@@ -14,6 +15,8 @@ from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
 from .api import PayAsUGOAuthError, PayAsUGOClient, PayAsUGOError
 from .const import CONF_ADDRESS, DOMAIN
+
+_LOGGER = logging.getLogger(__name__)
 
 
 STEP_USER_SCHEMA = vol.Schema(
@@ -58,17 +61,17 @@ class PayAsUGOConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             try:
                 await client.async_login()
                 await client.async_get_collections(months=1)
-            except PayAsUGOAuthError:
+            except PayAsUGOAuthError as err:
+                _LOGGER.debug("PayAsUGO authentication failed: %s", err)
                 errors["base"] = "invalid_auth"
-            except PayAsUGOError:
+            except PayAsUGOError as err:
+                _LOGGER.warning("Unable to connect to PayAsUGO: %s", err)
                 errors["base"] = "cannot_connect"
             else:
                 return self.async_create_entry(
                     title="Waste Management NZ PayAsUGO",
                     data=user_input,
                 )
-            finally:
-                await session.close()
 
         return self.async_show_form(
             step_id="user",
@@ -106,17 +109,17 @@ class PayAsUGOConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
             try:
                 await client.async_login()
-            except PayAsUGOAuthError:
+            except PayAsUGOAuthError as err:
+                _LOGGER.debug("PayAsUGO authentication failed: %s", err)
                 errors["base"] = "invalid_auth"
-            except PayAsUGOError:
+            except PayAsUGOError as err:
+                _LOGGER.warning("Unable to reconnect to PayAsUGO: %s", err)
                 errors["base"] = "cannot_connect"
             else:
                 return self.async_update_reload_and_abort(
                     self._reauth_entry,
                     data_updates=data,
                 )
-            finally:
-                await session.close()
 
         return self.async_show_form(
             step_id="reauth_confirm",
