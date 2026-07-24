@@ -8,8 +8,18 @@ from custom_components.payasugo.api import (
     _extract_aura_bootstrap,
     _extract_bootstrap_script_url,
     _parse_collection,
+    _redact_error_detail,
     _unwrap_return_value,
 )
+
+
+def test_redact_error_detail() -> None:
+    detail = _redact_error_detail(
+        " Login failed for user@example.com using secret-password ",
+        "user@example.com",
+        "secret-password",
+    )
+    assert detail == "Login failed for [redacted] using [redacted]"
 
 
 def test_aura_routes() -> None:

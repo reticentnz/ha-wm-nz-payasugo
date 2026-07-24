@@ -300,6 +300,16 @@ class PayAsUGOClient:
         url = urljoin(f"{self._base_url}/", path)
         try:
             response = await self._session.post(url, **kwargs)
+            if response.status >= 400:
+                detail = _redact_error_detail(
+                    await response.text(),
+                    self._username,
+                    self._password,
+                )
+                raise PayAsUGOProtocolError(
+                    f"PayAsUGO returned HTTP {response.status}"
+                    f"{f': {detail}' if detail else ''}"
+                )
             response.raise_for_status()
             return response
         except PayAsUGOError:
@@ -308,6 +318,20 @@ class PayAsUGOClient:
             raise PayAsUGOConnectionError(
                 f"Unable to reach PayAsUGO ({type(err).__name__}: {err})"
             ) from err
+
+
+def _redact_error_detail(content: str, username: str, password: str) -> str:
+    """Return a bounded server error with authentication data removed."""
+    detail = re.sub(r"\s+", " ", content).strip()
+    for secret in (username, password):
+        if secret:
+            detail = detail.replace(secret, "[redacted]")
+    detail = re.sub(
+        r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}",
+        "[redacted-email]",
+        detail,
+    )
+    return detail[:500]
 
 
 def _aura_route(descriptor: str) -> str:
