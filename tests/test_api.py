@@ -4,11 +4,27 @@ from datetime import date
 
 from custom_components.payasugo.api import (
     _add_months,
+    _aura_route,
     _extract_aura_bootstrap,
     _extract_bootstrap_script_url,
     _parse_collection,
     _unwrap_return_value,
 )
+
+
+def test_aura_routes() -> None:
+    assert (
+        _aura_route("apex://LightningLoginFormController/ACTION$login")
+        == "other.LightningLoginForm.login"
+    )
+    assert (
+        _aura_route("apex://PaytAppController/ACTION$getUserDetails")
+        == "other.PaytApp.getUserDetails"
+    )
+    assert (
+        _aura_route("aura://ApexActionController/ACTION$execute")
+        == "aura.ApexAction.execute"
+    )
 
 
 def test_extract_aura_bootstrap() -> None:

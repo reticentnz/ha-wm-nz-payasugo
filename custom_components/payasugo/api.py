@@ -73,7 +73,7 @@ class PayAsUGOClient:
             params={
                 "username": self._username,
                 "password": self._password,
-                "startUrl": self._APP_PAGE,
+                "startUrl": "",
             },
         )
         if not isinstance(result, str) or not result:
@@ -243,7 +243,10 @@ class PayAsUGOClient:
             ]
         }
         response = await self._post(
-            self._AURA_ENDPOINT,
+            (
+                f"{self._AURA_ENDPOINT}?r={self._action_id - 1}"
+                f"&{_aura_route(descriptor)}=1"
+            ),
             data={
                 "message": json.dumps(message, separators=(",", ":")),
                 "aura.context": json.dumps(
@@ -300,6 +303,17 @@ class PayAsUGOClient:
             raise PayAsUGOConnectionError(
                 f"Unable to reach PayAsUGO ({type(err).__name__}: {err})"
             ) from err
+
+
+def _aura_route(descriptor: str) -> str:
+    """Return Salesforce's request-routing key for an Aura descriptor."""
+    if descriptor == "apex://LightningLoginFormController/ACTION$login":
+        return "other.LightningLoginForm.login"
+    if descriptor == "apex://PaytAppController/ACTION$getUserDetails":
+        return "other.PaytApp.getUserDetails"
+    if descriptor == "aura://ApexActionController/ACTION$execute":
+        return "aura.ApexAction.execute"
+    raise PayAsUGOProtocolError(f"Unsupported Aura action: {descriptor}")
 
 
 def _extract_aura_bootstrap(
