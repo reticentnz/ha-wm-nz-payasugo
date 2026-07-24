@@ -8,11 +8,32 @@ from custom_components.payasugo.api import (
     _compact_aura_context,
     _extract_aura_bootstrap,
     _extract_bootstrap_script_url,
+    _login_event_url,
     _login_redirect,
     _parse_collection,
     _redact_error_detail,
     _unwrap_return_value,
 )
+
+
+def test_login_event_url() -> None:
+    assert _login_event_url(
+        {
+            "events": [
+                {
+                    "attributes": {
+                        "values": {
+                            "url": "/s/",
+                        }
+                    }
+                }
+            ]
+        }
+    ) == "/s/"
+
+
+def test_login_event_url_missing() -> None:
+    assert _login_event_url({"events": []}) is None
 
 
 def test_login_redirect_rejects_error_message() -> None:
@@ -58,6 +79,12 @@ def test_redact_error_detail() -> None:
 
 
 def test_aura_routes() -> None:
+    assert _aura_route(
+        "apex://LightningLoginFormController/ACTION$isGuestUser"
+    ) == "other.LightningLoginForm.isGuestUser"
+    assert _aura_route(
+        "apex://LightningLoginFormController/ACTION$getForgotPasswordUrl"
+    ) == "other.LightningLoginForm.getForgotPasswordUrl"
     assert (
         _aura_route("apex://LightningLoginFormController/ACTION$login")
         == "other.LightningLoginForm.login"

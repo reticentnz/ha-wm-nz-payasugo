@@ -8,7 +8,8 @@ from calendar import monthrange
 from collections.abc import Mapping
 from datetime import date
 from typing import Any
-from urllib.parse import urljoin
+from urllib.parse import quote, urljoin
+from uuid import uuid4
 
 from aiohttp import ClientResponse, ClientSession
 from yarl import URL
@@ -58,6 +59,7 @@ class PayAsUGOClient:
         self._token = "null"
         self._page_uri = self._APP_PAGE
         self._action_id = 1
+        self._page_scope_id = str(uuid4())
 
     async def async_login(self) -> None:
         """Create an authenticated Aura session."""
@@ -67,12 +69,13 @@ class PayAsUGOClient:
         self._set_aura_bootstrap(login_bootstrap)
         self._page_uri = login_response.url.path_qs
 
+        await self._async_prepare_login()
         result = await self._aura_action(
             descriptor="apex://LightningLoginFormController/ACTION$login",
             calling_descriptor="markup://c:loginForm",
             params={
-                "username": self._username,
-                "password": self._password,
+                "username": quote(self._username, safe=""),
+                "password": quote(self._password, safe=""),
                 "startUrl": "",
             },
         )
@@ -85,6 +88,52 @@ class PayAsUGOClient:
         app_bootstrap = await self._async_load_bootstrap(app_html)
         self._set_aura_bootstrap(app_bootstrap)
         self._page_uri = self._APP_PAGE
+
+    async def _async_prepare_login(self) -> None:
+        """Run the guest-session actions performed before browser login."""
+        actions = (
+            (
+                "serviceComponent://ui.communities.components.aura.components."
+                "forceCommunity.navigationMenu.NavigationMenuDataProviderController/"
+                "ACTION$getNavigationMenu",
+                "markup://forceCommunity:navigationMenuBase",
+                {
+                    "navigationLinkSetIdOrName": "",
+                    "includeImageUrl": False,
+                    "addHomeMenuItem": True,
+                    "menuItemTypesToSkip": ["SystemLink", "Event", "Modal"],
+                    "masterLabel": "Default Navigation",
+                },
+            ),
+            (
+                "serviceComponent://ui.self.service.components.profileMenu."
+                "ProfileMenuController/ACTION$getProfileMenuResponse",
+                "markup://selfService:profileMenuAPI",
+                {},
+            ),
+            (
+                "serviceComponent://ui.force.components.controllers.hostConfig."
+                "HostConfigController/ACTION$getConfigData",
+                "UNKNOWN",
+                {},
+            ),
+            (
+                "apex://LightningLoginFormController/ACTION$isGuestUser",
+                "markup://c:loginForm",
+                {},
+            ),
+            (
+                "apex://LightningLoginFormController/ACTION$getForgotPasswordUrl",
+                "markup://c:loginForm",
+                {},
+            ),
+        )
+        for descriptor, calling_descriptor, params in actions:
+            await self._aura_action(
+                descriptor=descriptor,
+                calling_descriptor=calling_descriptor,
+                params=params,
+            )
 
     async def _async_load_bootstrap(self, html: str) -> str:
         """Return content containing Aura's runtime bootstrap configuration."""
@@ -246,8 +295,14 @@ class PayAsUGOClient:
             ),
             headers={
                 "Accept": "*/*",
+                "Accept-Language": "en-NZ,en;q=0.9",
                 "Origin": self._base_url,
                 "Referer": urljoin(f"{self._base_url}/", self._page_uri),
+                "User-Agent": (
+                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
+                ),
+                "x-sfdc-page-scope-id": self._page_scope_id,
             },
             data={
                 "message": json.dumps(message, separators=(",", ":")),
@@ -278,6 +333,10 @@ class PayAsUGOClient:
                 self._context = None
                 raise PayAsUGOAuthError(message_text)
             raise PayAsUGOProtocolError(message_text or f"Aura action failed: {state}")
+        if descriptor == "apex://LightningLoginFormController/ACTION$login":
+            redirect = _login_event_url(payload)
+            if redirect is not None:
+                return redirect
         return action.get("returnValue")
 
     async def _get(self, path_or_url: str) -> ClientResponse:
@@ -356,15 +415,65 @@ def _login_redirect(result: Any) -> str:
     return result
 
 
+def _login_event_url(payload: Mapping[str, Any]) -> str | None:
+    """Return the redirect URL emitted after a successful Salesforce login."""
+    events = payload.get("events")
+    if not isinstance(events, list):
+        return None
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        attributes = event.get("attributes")
+        if not isinstance(attributes, dict):
+            continue
+        values = attributes.get("values")
+        if not isinstance(values, dict):
+            continue
+        url = values.get("url")
+        if isinstance(url, str) and url:
+            return url
+    return None
+
+
 def _aura_route(descriptor: str) -> str:
     """Return Salesforce's request-routing key for an Aura descriptor."""
-    if descriptor == "apex://LightningLoginFormController/ACTION$login":
-        return "other.LightningLoginForm.login"
-    if descriptor == "apex://PaytAppController/ACTION$getUserDetails":
-        return "other.PaytApp.getUserDetails"
-    if descriptor == "aura://ApexActionController/ACTION$execute":
-        return "aura.ApexAction.execute"
-    raise PayAsUGOProtocolError(f"Unsupported Aura action: {descriptor}")
+    routes = {
+        (
+            "serviceComponent://ui.communities.components.aura.components."
+            "forceCommunity.navigationMenu.NavigationMenuDataProviderController/"
+            "ACTION$getNavigationMenu"
+        ): (
+            "ui-communities-components-aura-components-forceCommunity-navigationMenu."
+            "NavigationMenuDataProvider.getNavigationMenu"
+        ),
+        (
+            "serviceComponent://ui.self.service.components.profileMenu."
+            "ProfileMenuController/ACTION$getProfileMenuResponse"
+        ): "ui-self-service-components-profileMenu.ProfileMenu.getProfileMenuResponse",
+        (
+            "serviceComponent://ui.force.components.controllers.hostConfig."
+            "HostConfigController/ACTION$getConfigData"
+        ): "ui-force-components-controllers-hostConfig.HostConfig.getConfigData",
+        "apex://LightningLoginFormController/ACTION$isGuestUser": (
+            "other.LightningLoginForm.isGuestUser"
+        ),
+        "apex://LightningLoginFormController/ACTION$getForgotPasswordUrl": (
+            "other.LightningLoginForm.getForgotPasswordUrl"
+        ),
+        "apex://LightningLoginFormController/ACTION$login": (
+            "other.LightningLoginForm.login"
+        ),
+        "apex://PaytAppController/ACTION$getUserDetails": (
+            "other.PaytApp.getUserDetails"
+        ),
+        "aura://ApexActionController/ACTION$execute": "aura.ApexAction.execute",
+    }
+    try:
+        return routes[descriptor]
+    except KeyError as err:
+        raise PayAsUGOProtocolError(
+            f"Unsupported Aura action: {descriptor}"
+        ) from err
 
 
 def _extract_aura_bootstrap(
