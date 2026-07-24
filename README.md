@@ -46,6 +46,9 @@ only to `payasugo.wastemanagement.co.nz`.
 The switch is disabled after the documented pause cutoff, 7:00 AM two days
 before the collection date.
 
+Collection information is refreshed every 24 hours, when the integration is
+loaded, and immediately after a collection is paused or re-enabled.
+
 ## Development status
 
 The request and response models are based on a browser capture from July 2026.

@@ -7,5 +7,5 @@ PLATFORMS = ["sensor", "switch"]
 
 CONF_ADDRESS = "address"
 
-DEFAULT_SCAN_INTERVAL = timedelta(hours=6)
+DEFAULT_SCAN_INTERVAL = timedelta(hours=24)
 BASE_URL = "https://payasugo.wastemanagement.co.nz"
