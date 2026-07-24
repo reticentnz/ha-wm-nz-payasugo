@@ -247,6 +247,11 @@ class PayAsUGOClient:
                 f"{self._AURA_ENDPOINT}?r={self._action_id - 1}"
                 f"&{_aura_route(descriptor)}=1"
             ),
+            headers={
+                "Accept": "*/*",
+                "Origin": self._base_url,
+                "Referer": urljoin(f"{self._base_url}/", self._page_uri),
+            },
             data={
                 "message": json.dumps(message, separators=(",", ":")),
                 "aura.context": json.dumps(
