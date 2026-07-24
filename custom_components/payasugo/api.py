@@ -8,7 +8,7 @@ from calendar import monthrange
 from collections.abc import Mapping
 from datetime import date
 from typing import Any
-from urllib.parse import quote, urljoin
+from urllib.parse import urljoin
 
 from aiohttp import ClientResponse, ClientSession
 from yarl import URL
@@ -71,8 +71,8 @@ class PayAsUGOClient:
             descriptor="apex://LightningLoginFormController/ACTION$login",
             calling_descriptor="markup://c:loginForm",
             params={
-                "username": quote(self._username, safe=""),
-                "password": quote(self._password, safe=""),
+                "username": self._username,
+                "password": self._password,
                 "startUrl": "",
             },
         )
