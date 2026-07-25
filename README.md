@@ -55,7 +55,9 @@ The switch is disabled after the documented pause cutoff, 7:00 AM two days
 before the collection date.
 
 Collection information is refreshed every 24 hours, when the integration is
-loaded, and immediately after a collection is paused or re-enabled.
+loaded, and immediately after a collection is paused or re-enabled. A failed
+scheduled refresh is retried after 5, 15, 30, and then 60 minutes rather than
+leaving the entities unavailable until the next daily refresh.
 
 ## Development status
 
