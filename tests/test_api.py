@@ -80,6 +80,36 @@ def test_collection_lookup_stops_after_finding_an_upcoming_month() -> None:
     client._execute_apex.assert_awaited_once()
 
 
+def test_collection_lookup_treats_null_events_as_an_empty_month() -> None:
+    client = object.__new__(PayAsUGOClient)
+    client._context = {"mode": "PROD"}
+    client._execute_apex = AsyncMock(
+        side_effect=[
+            {"returnValue": {"returnValue": {"currentEvents": None}}},
+            {
+                "returnValue": {
+                    "returnValue": {
+                        "currentEvents": [
+                            {
+                                "Id": "event-1",
+                                "EventDate__c": "2026-09-08",
+                                "Status__c": "Planned",
+                            }
+                        ]
+                    }
+                }
+            },
+        ]
+    )
+
+    collections = asyncio.run(
+        client.async_get_collections(today=date(2026, 8, 1))
+    )
+
+    assert [item.collection_id for item in collections] == ["event-1"]
+    assert client._execute_apex.await_count == 2
+
+
 def test_auth_error_detection() -> None:
     assert _is_auth_error("Invalid session")
     assert _is_auth_error("Client is out of sync")

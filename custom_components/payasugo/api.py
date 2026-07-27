@@ -261,7 +261,14 @@ class PayAsUGOClient:
                 },
             )
             payload = _unwrap_return_value(value)
-            for raw_event in payload.get("currentEvents", []):
+            raw_events = payload.get("currentEvents")
+            if raw_events is None:
+                raw_events = []
+            if not isinstance(raw_events, list):
+                raise PayAsUGOProtocolError(
+                    "PayAsUGO returned an invalid collection event list"
+                )
+            for raw_event in raw_events:
                 collection = _parse_collection(raw_event)
                 if collection.collection_date >= (today or date.today()):
                     events[collection.collection_id] = collection
