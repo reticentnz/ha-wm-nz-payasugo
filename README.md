@@ -70,8 +70,15 @@ it relies on the unsupported private API used by the PayAsUGO website.
 
 Report defects through the
 [GitHub issue tracker](https://github.com/reticentnz/ha-wm-nz-payasugo/issues).
-Do not attach HAR files or include PayAsUGO passwords, cookies, addresses,
-account identifiers, or Salesforce tokens in an issue.
+When reporting a problem, download the integration's diagnostics from
+**Settings → Devices & services → PayAsUGO → three-dot menu → Download
+diagnostics** and attach that file to the issue. The diagnostics use a strict
+allowlist and exclude passwords, email addresses, street addresses, cookies,
+tokens, account and collection IDs, and other identifiers.
+
+Do not create or attach HAR files. They contain authenticated private API
+traffic and may expose credentials and customer information that the safe
+diagnostics intentionally omit.
 
 ## Disclaimer
 

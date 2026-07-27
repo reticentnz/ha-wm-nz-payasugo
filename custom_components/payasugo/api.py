@@ -62,6 +62,53 @@ class PayAsUGOClient:
         self._action_id = 1
         self._page_scope_id = str(uuid4())
 
+    def diagnostics(self) -> dict[str, Any]:
+        """Return an identifier-free summary of the private API session.
+
+        Diagnostics deliberately describe only protocol state and value shapes.
+        Raw Aura values, URLs, cookie names and values, tokens, credentials, and
+        Salesforce identifiers must never be added here.
+        """
+        context = self._context
+        loaded = context.get("loaded") if context is not None else None
+        known_context_keys = (
+            "app",
+            "dn",
+            "fwuid",
+            "globals",
+            "loaded",
+            "mode",
+            "uad",
+        )
+        present_context_keys = (
+            [key for key in known_context_keys if key in context]
+            if context is not None
+            else []
+        )
+        token_state = "unset"
+        if self._token != "null":
+            token_state = (
+                "three_part" if len(self._token.split(".")) == 3 else "other"
+            )
+        return {
+            "authenticated": context is not None,
+            "aura_context": {
+                "present": context is not None,
+                "keys": present_context_keys,
+                "value_types": (
+                    {key: type(context[key]).__name__ for key in present_context_keys}
+                    if context is not None
+                    else {}
+                ),
+                "loaded_component_count": (
+                    len(loaded) if isinstance(loaded, dict) else 0
+                ),
+            },
+            "token_state": token_state,
+            "response_cookie_count": len(self._response_cookies),
+            "action_count": max(self._action_id - 1, 0),
+        }
+
     async def async_login(self) -> None:
         """Create an authenticated Aura session."""
         login_response = await self._get(self._LOGIN_PAGE)
