@@ -262,8 +262,6 @@ class PayAsUGOClient:
             )
             payload = _unwrap_return_value(value)
             raw_events = payload.get("currentEvents")
-            if raw_events is None:
-                raw_events = []
             if not isinstance(raw_events, list):
                 raise PayAsUGOProtocolError(
                     "PayAsUGO returned an invalid collection event list"

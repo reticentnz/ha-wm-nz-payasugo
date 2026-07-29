@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, Mock
 from custom_components.payasugo.api import (
     PayAsUGOAuthError,
     PayAsUGOClient,
+    PayAsUGOProtocolError,
     _add_months,
     _aura_route,
     _aura_exception_message,
@@ -80,34 +81,21 @@ def test_collection_lookup_stops_after_finding_an_upcoming_month() -> None:
     client._execute_apex.assert_awaited_once()
 
 
-def test_collection_lookup_treats_null_events_as_an_empty_month() -> None:
+def test_collection_lookup_rejects_null_events() -> None:
     client = object.__new__(PayAsUGOClient)
     client._context = {"mode": "PROD"}
     client._execute_apex = AsyncMock(
-        side_effect=[
-            {"returnValue": {"returnValue": {"currentEvents": None}}},
-            {
-                "returnValue": {
-                    "returnValue": {
-                        "currentEvents": [
-                            {
-                                "Id": "event-1",
-                                "EventDate__c": "2026-09-08",
-                                "Status__c": "Planned",
-                            }
-                        ]
-                    }
-                }
-            },
-        ]
+        return_value={"returnValue": {"returnValue": {"currentEvents": None}}}
     )
 
-    collections = asyncio.run(
-        client.async_get_collections(today=date(2026, 8, 1))
-    )
+    try:
+        asyncio.run(client.async_get_collections(today=date(2026, 8, 1)))
+    except PayAsUGOProtocolError as err:
+        assert str(err) == "PayAsUGO returned an invalid collection event list"
+    else:
+        raise AssertionError("Expected a null event list to be rejected")
 
-    assert [item.collection_id for item in collections] == ["event-1"]
-    assert client._execute_apex.await_count == 2
+    client._execute_apex.assert_awaited_once()
 
 
 def test_auth_error_detection() -> None:
