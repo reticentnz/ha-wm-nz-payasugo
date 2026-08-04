@@ -57,6 +57,7 @@ def test_ensure_authenticated_reuses_an_active_session() -> None:
 def test_collection_lookup_stops_after_finding_an_upcoming_month() -> None:
     client = object.__new__(PayAsUGOClient)
     client._context = {"mode": "PROD"}
+    client._address = "Example address"
     client._execute_apex = AsyncMock(
         return_value={
             "returnValue": {
@@ -81,21 +82,63 @@ def test_collection_lookup_stops_after_finding_an_upcoming_month() -> None:
     client._execute_apex.assert_awaited_once()
 
 
-def test_collection_lookup_rejects_null_events() -> None:
+def test_collection_lookup_refreshes_login_after_null_events() -> None:
     client = object.__new__(PayAsUGOClient)
     client._context = {"mode": "PROD"}
+    client._address = "Example address"
+    client._execute_apex = AsyncMock(
+        side_effect=[
+            {"returnValue": {"returnValue": {"currentEvents": None}}},
+            {
+                "returnValue": {
+                    "returnValue": {
+                        "currentEvents": [
+                            {
+                                "Id": "event-1",
+                                "EventDate__c": "2026-08-11",
+                                "Status__c": "Planned",
+                            }
+                        ]
+                    }
+                }
+            },
+        ]
+    )
+    client._reset_authentication = Mock()
+    client.async_login = AsyncMock()
+
+    collections = asyncio.run(
+        client.async_get_collections(today=date(2026, 8, 1))
+    )
+
+    assert [item.collection_id for item in collections] == ["event-1"]
+    assert client._execute_apex.await_count == 2
+    client._reset_authentication.assert_called_once_with()
+    client.async_login.assert_awaited_once_with()
+
+
+def test_collection_lookup_rejects_null_events_after_login_refresh() -> None:
+    client = object.__new__(PayAsUGOClient)
+    client._context = {"mode": "PROD"}
+    client._address = "Example address"
     client._execute_apex = AsyncMock(
         return_value={"returnValue": {"returnValue": {"currentEvents": None}}}
     )
+    client._reset_authentication = Mock()
+    client.async_login = AsyncMock()
 
     try:
         asyncio.run(client.async_get_collections(today=date(2026, 8, 1)))
     except PayAsUGOProtocolError as err:
-        assert str(err) == "PayAsUGO returned an invalid collection event list"
+        assert str(err) == (
+            "PayAsUGO returned an invalid collection event list after login refresh"
+        )
     else:
-        raise AssertionError("Expected a null event list to be rejected")
+        raise AssertionError("Expected repeated null event lists to be rejected")
 
-    client._execute_apex.assert_awaited_once()
+    assert client._execute_apex.await_count == 2
+    client._reset_authentication.assert_called_once_with()
+    client.async_login.assert_awaited_once_with()
 
 
 def test_auth_error_detection() -> None:

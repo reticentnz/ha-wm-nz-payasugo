@@ -246,26 +246,7 @@ class PayAsUGOClient:
 
         for offset in range(months):
             month = _add_months(current, offset)
-            value = await self._execute_apex(
-                "getUsersSDE",
-                {
-                    "jsonMap": json.dumps(
-                        {
-                            "monthFirstDateStr": (
-                                f"{month.year}-{month.month}-{month.day}"
-                            ),
-                            "address": self._address,
-                        },
-                        separators=(",", ":"),
-                    )
-                },
-            )
-            payload = _unwrap_return_value(value)
-            raw_events = payload.get("currentEvents")
-            if not isinstance(raw_events, list):
-                raise PayAsUGOProtocolError(
-                    "PayAsUGO returned an invalid collection event list"
-                )
+            raw_events = await self._async_get_collection_events(month)
             for raw_event in raw_events:
                 collection = _parse_collection(raw_event)
                 if collection.collection_date >= (today or date.today()):
@@ -274,6 +255,33 @@ class PayAsUGOClient:
                 break
 
         return tuple(sorted(events.values(), key=lambda item: item.collection_date))
+
+    async def _async_get_collection_events(
+        self, month: date
+    ) -> list[Mapping[str, Any]]:
+        """Return one month's events, retrying once with a fresh session."""
+        params = {
+            "jsonMap": json.dumps(
+                {
+                    "monthFirstDateStr": f"{month.year}-{month.month}-{month.day}",
+                    "address": self._address,
+                },
+                separators=(",", ":"),
+            )
+        }
+        for attempt in range(2):
+            value = await self._execute_apex("getUsersSDE", params)
+            payload = _unwrap_return_value(value)
+            raw_events = payload.get("currentEvents")
+            if isinstance(raw_events, list):
+                return raw_events
+            if attempt == 0:
+                self._reset_authentication()
+                await self.async_login()
+
+        raise PayAsUGOProtocolError(
+            "PayAsUGO returned an invalid collection event list after login refresh"
+        )
 
     async def async_get_service_addresses(self) -> tuple[str, ...]:
         """Return active PayAsUGO service addresses for the signed-in account."""
