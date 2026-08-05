@@ -206,6 +206,15 @@ class PayAsUGOClient:
                 token = self._response_cookies[cookie_name]
         if len(token.split(".")) != 3:
             cookies = self._session.cookie_jar.filter_cookies(URL(self._base_url))
+            candidate_list: list[str] = []
+            if cookie_name:
+                for name, value in self._response_cookies.items():
+                    if name.lower() == cookie_name.lower() and len(value.split(".")) == 3:
+                        candidate_list.append(value)
+                for cookie in cookies.values():
+                    if cookie.key.lower() == cookie_name.lower() and len(cookie.value.split(".")) == 3:
+                        candidate_list.append(cookie.value)
+
             token_candidates = {
                 cookie.value
                 for cookie in cookies.values()
@@ -217,7 +226,12 @@ class PayAsUGOClient:
                 for value in self._response_cookies.values()
                 if len(value) > 100 and len(value.split(".")) == 3
             )
-            if len(token_candidates) == 1:
+            ey_candidates = [c for c in token_candidates if c.startswith("eyJ")]
+            if candidate_list:
+                token = candidate_list[0]
+            elif ey_candidates:
+                token = ey_candidates[0]
+            elif token_candidates:
                 token = next(iter(token_candidates))
         if (
             len(token.split(".")) != 3

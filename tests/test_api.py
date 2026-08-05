@@ -340,3 +340,27 @@ def test_unwrap_return_value() -> None:
 
 def test_add_months_across_year() -> None:
     assert _add_months(date(2026, 12, 1), 2) == date(2027, 2, 1)
+
+
+def test_set_aura_bootstrap_multiple_token_candidates() -> None:
+    client = object.__new__(PayAsUGOClient)
+    client._session = Mock()
+    client._session.cookie_jar.filter_cookies.return_value = {}
+    client._base_url = "https://example.com"
+    dummy_jwt1 = "eyJhbGciOiJIUzI1NiJ9." + "a" * 100 + ".signature1"
+    dummy_jwt2 = "eyJhbGciOiJIUzI1NiJ9." + "b" * 100 + ".signature2"
+    client._response_cookies = {
+        "cookie1": dummy_jwt1,
+        "cookie2": dummy_jwt2,
+    }
+    content = """
+    <script>
+    window.auraConfig = {
+      "context": {"mode": "PROD", "fwuid": "example", "app": "siteforce:communityApp", "loaded": {}},
+      "token": "null"
+    };
+    </script>
+    """
+    client._set_aura_bootstrap(content)
+    assert client._token in (dummy_jwt1, dummy_jwt2)
+
