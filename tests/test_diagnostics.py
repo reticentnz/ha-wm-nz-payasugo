@@ -22,26 +22,17 @@ def _load_diagnostics_module():
     const = types.ModuleType("homeassistant.const")
     const.CONF_PASSWORD = "password"
     const.CONF_USERNAME = "username"
-    previous = {
-        "homeassistant": sys.modules.get("homeassistant"),
-        "homeassistant.const": sys.modules.get("homeassistant.const"),
-    }
     sys.modules.update({"homeassistant": homeassistant, "homeassistant.const": const})
-    try:
-        spec = importlib.util.spec_from_file_location(
-            "custom_components.payasugo.diagnostics", COMPONENT / "diagnostics.py"
-        )
-        assert spec is not None and spec.loader is not None
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[spec.name] = module
-        spec.loader.exec_module(module)
-        return module
-    finally:
-        for name, old_module in previous.items():
-            if old_module is None:
-                sys.modules.pop(name, None)
-            else:
-                sys.modules[name] = old_module
+    spec = importlib.util.spec_from_file_location(
+        "custom_components.payasugo.diagnostics", COMPONENT / "diagnostics.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+_DIAGNOSTICS_MODULE = _load_diagnostics_module()
 
 
 def test_client_diagnostics_exposes_shapes_not_private_values() -> None:
@@ -81,7 +72,7 @@ def test_client_diagnostics_exposes_shapes_not_private_values() -> None:
 
 
 def test_config_entry_diagnostics_are_useful_and_identifier_free() -> None:
-    module = _load_diagnostics_module()
+    module = _DIAGNOSTICS_MODULE
     client = object.__new__(PayAsUGOClient)
     client._context = None
     client._token = "null"

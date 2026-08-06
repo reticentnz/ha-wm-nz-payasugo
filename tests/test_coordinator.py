@@ -61,27 +61,21 @@ def _load_coordinator_module():
         "homeassistant.helpers": helpers,
         "homeassistant.helpers.update_coordinator": update_coordinator,
     }
-    previous = {name: sys.modules.get(name) for name in modules}
     sys.modules.update(modules)
-    try:
-        spec = importlib.util.spec_from_file_location(
-            "custom_components.payasugo.coordinator", COMPONENT / "coordinator.py"
-        )
-        assert spec is not None and spec.loader is not None
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[spec.name] = module
-        spec.loader.exec_module(module)
-        return module
-    finally:
-        for name, old_module in previous.items():
-            if old_module is None:
-                sys.modules.pop(name, None)
-            else:
-                sys.modules[name] = old_module
+    spec = importlib.util.spec_from_file_location(
+        "custom_components.payasugo.coordinator", COMPONENT / "coordinator.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+_COORDINATOR_MODULE = _load_coordinator_module()
 
 
 def test_failed_refresh_backs_off_then_recovers(caplog) -> None:
-    module = _load_coordinator_module()
+    module = _COORDINATOR_MODULE
     client = types.SimpleNamespace(
         async_get_collections=AsyncMock(
             side_effect=[
@@ -112,7 +106,7 @@ def test_failed_refresh_backs_off_then_recovers(caplog) -> None:
 
 
 def test_retry_interval_is_capped() -> None:
-    module = _load_coordinator_module()
+    module = _COORDINATOR_MODULE
     client = types.SimpleNamespace(
         async_get_collections=AsyncMock(
             side_effect=PayAsUGOConnectionError("temporary outage")
