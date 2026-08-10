@@ -3,7 +3,7 @@
 [![GitHub Release](https://img.shields.io/github/v/release/reticentnz/ha-wm-nz-payasugo?include_prereleases)](https://github.com/reticentnz/ha-wm-nz-payasugo/releases)
 [![Validate](https://github.com/reticentnz/ha-wm-nz-payasugo/actions/workflows/validate.yml/badge.svg)](https://github.com/reticentnz/ha-wm-nz-payasugo/actions/workflows/validate.yml)
 
-An experimental Home Assistant custom integration for Waste Management New
+An unofficial Home Assistant custom integration for Waste Management New
 Zealand's PayAsUGO collection service.
 
 This project is specifically for the New Zealand service at
@@ -59,12 +59,13 @@ loaded, and immediately after a collection is paused or re-enabled. A failed
 scheduled refresh is retried after 5, 15, 30, and then 60 minutes rather than
 leaving the entities unavailable until the next daily refresh.
 
-## Development status
+## Reliability and compatibility
 
 The request and response models are based on a browser capture from July 2026.
-The integration has been tested on a Home Assistant instance, including setup
-and the collection workflow. It should still be treated as experimental because
-it relies on the unsupported private API used by the PayAsUGO website.
+The integration has been running reliably on a Home Assistant instance,
+including setup and the collection workflow. Because it relies on the
+unsupported private API used by the PayAsUGO website, website changes may still
+require integration updates.
 
 ## Support
 
