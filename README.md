@@ -1,6 +1,7 @@
 # Waste Management New Zealand PayAsUGO for Home Assistant
 
 [![GitHub Release](https://img.shields.io/github/v/release/reticentnz/ha-wm-nz-payasugo?include_prereleases)](https://github.com/reticentnz/ha-wm-nz-payasugo/releases)
+[![HACS Default](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/integration)
 [![Validate](https://github.com/reticentnz/ha-wm-nz-payasugo/actions/workflows/validate.yml/badge.svg)](https://github.com/reticentnz/ha-wm-nz-payasugo/actions/workflows/validate.yml)
 
 An unofficial Home Assistant custom integration for Waste Management New
@@ -25,12 +26,12 @@ It provides:
 
 ### HACS
 
-1. Open HACS.
-2. Add `https://github.com/reticentnz/ha-wm-nz-payasugo` as a custom
-   repository in the **Integration** category.
-3. Install **Waste Management New Zealand PayAsUGO**.
-4. Restart Home Assistant.
-5. Add the integration from **Settings → Devices & services**.
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=reticentnz&repository=ha-wm-nz-payasugo&category=integration)
+
+1. Open HACS in Home Assistant.
+2. Search for and install **Waste Management New Zealand PayAsUGO**.
+3. Restart Home Assistant.
+4. Add the integration from **Settings → Devices & services**.
 
 ### Manual
 
